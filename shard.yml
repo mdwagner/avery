@@ -1,0 +1,9 @@
+name: avery
+version: 0.1.0
+
+authors:
+  - Michael Wagner <mdwranger@gmail.com>
+
+crystal: 1.7.0
+
+license: MIT
