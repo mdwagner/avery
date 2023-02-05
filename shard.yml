@@ -7,3 +7,6 @@ authors:
 crystal: 1.7.0
 
 license: MIT
+
+crystalline:
+  main: .crystalline_main.cr

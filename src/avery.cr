@@ -1,1 +1,5 @@
-require "./avery/*"
+require "./avery/version"
+require "./avery/file_context"
+require "./avery/context"
+require "./avery/handler"
+require "./avery/pipeline"
