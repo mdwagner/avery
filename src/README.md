@@ -2,36 +2,35 @@
 
 ### Pipeline:
 - pipelines follow the AWK model (BEGIN,PATTERN,END)
-- pipelines have 3 types of Handlers: Begin, Stream, End
-- pipelines (Begin) can only run once, unless calling reset
-- pipelines (Stream to End) can run multiple times
+- pipelines have 3 types of Handlers: Initializers, Streams, Destroyers
+- Initializers can only run once, unless calling reset
+- Streams and Destroyers can run multiple times
 - **todo:** pipelines keep a log/record in debug mode
-- reset: `context.files.clear` and `context.state.clear`
+- reset: clears both files and cache
 
-### Begin:
+### Initializer:
 - runs once
 - defines files to process
 - defines (shell) processes in background
-- defines state in `context.state[namespace] = Class.new`
-- defines files in `context.files[file_path] = FileContext.new`
+- defines (optional) cache
 
 ### Stream:
 - runs multiple times
-- works on each individual file defined by Begin Handlers
-- can modify files multiple times (across sequential Stream Handlers)
+- works on each individual file defined by Initializers
+- can modify files multiple times (through sequential Stream Handlers)
 
-### End:
+### Destroyer:
 - runs after all Stream Handlers (runs once per compile)
 - gets all finalized files from Stream Handlers
 - creates,copies,deletes,etc. files for whatever use required
 
 ### Context
-- files : Hash(String, FileContext)
+- files : Hash(String, FileState)
   - key: string path of file
-  - value: file context that tracks file through Stream handlers
-- state : Hash(String, State)
-  - key: namespace of custom state
-  - value: custom state to be used throughout all handlers
+  - value: file state that tracks file through Stream handlers
+- cache : Hash(String, String)
+  - key: namespace of custom cache
+  - value: custom cache to be used throughout all handlers
 
 ### Sprockets examples
 

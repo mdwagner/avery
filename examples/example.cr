@@ -4,71 +4,30 @@ require "json"
 require "mime"
 require "../src/avery"
 
-##
-# Example
-#
-# pipeline = Avery::Pipeline.new
-# pipeline.begin_handlers << CustomBeginHandler.new
-# pipeline.stream_handlers << CustomStreamHandler.new
-# pipeline.end_handlers << CustomEndHandler.new
-# pipeline.execute
-##
+class Count
+  include JSON::Serializable
+  property count : Int32
 
-class CountFilesProcessed
-  include Avery::Context::State
-  KEY = "count"
-  getter count = 0
+  def initialize(@count)
+  end
 
   def increment
     @count += 1
   end
 end
 
-class CustomBeginHandler
-  include Avery::Handler
-
-  def call(context)
-    Dir.glob("src/**/*.js", "src/**/*.css") do |file|
-      context.files[file] = Avery::FileContext.new(file)
-    end
-    context.state[CountFilesProcessed::KEY] = CountFilesProcessed.new
-  end
-end
-
-class CustomStreamHandler
-  include Avery::Handler
-
-  def call(context)
-    if context.current_file?
-      content = File.read(current_file.file_path)
-      current_file.file_contents = content
-      current_file.file_md5 = Digest::MD5.hexdigest(content)
-      current_file.file_mime_type = MIME.from_filename(current_file.file_path)
-
-      if state = context.state[CountFilesProcessed::KEY]?
-        if state.class == CountFilesProcessed
-          klass = state.as(CountFilesProcessed)
-          klass.increment
-        end
-      end
-    end
-  end
-end
-
-class CustomEndHandler
-  include Avery::Handler
-
+class CustomDestroyer
   def call(context)
     public_dir = Path.new("public")
     assets_dir = public_dir.join("assets")
     manifest_json_path = public_dir.join("manifest.json")
     manifest = {} of String => String
 
-    context.files.values.each do |ctx|
-      file = ctx.file_path
+    context.files.values.each do |state|
+      file = state.path
       path = Path.new(file)
-      content = ctx.file_contents
-      md5 = ctx.file_md5
+      content = state.contents
+      md5 = state.md5
       key_path = strip_components(path, 1)
 
       case ext = path.extension
@@ -83,11 +42,9 @@ class CustomEndHandler
 
     File.write(manifest_json_path, manifest.to_pretty_json)
 
-    if state = context.state[CountFilesProcessed::KEY]?
-      if state.class == CountFilesProcessed
-        klass = state.as(CountFilesProcessed)
-        puts "Files Processed: #{klass.count}"
-      end
+    if count_json = context.cache["count"]?
+      c = Count.from_json(count_json)
+      context.log("Files Processed: #{c.count}")
     end
   end
 
@@ -96,3 +53,32 @@ class CustomEndHandler
   end
 end
 
+pipeline = Avery::Pipeline.new
+
+pipeline.define_initializer do |ctx|
+  Dir.glob("src/**/*.js", "src/**/*.css") do |file|
+    ctx.add_file(file)
+  end
+  ctx.cache["count"] = Count.new(0).to_json
+end
+
+pipeline.define_stream do |ctx|
+  if current_file = ctx.current_file?
+    content = File.read(current_file.path)
+    current_file.contents = content
+    current_file.md5 = Digest::MD5.hexdigest(content)
+    current_file.mime_type = MIME.from_filename(current_file.path)
+
+    if count_json = ctx.cache["count"]?
+      count = Count.from_json(count_json)
+      count.increment
+      ctx.cache["count"] = count.to_json
+    end
+  end
+end
+
+pipeline.define_destroyer do |ctx|
+  CustomDestroyer.new.call(ctx)
+end
+
+pipeline.execute
